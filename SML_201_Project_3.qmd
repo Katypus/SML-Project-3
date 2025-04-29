@@ -13,7 +13,7 @@ editor: visual
 Fill the vector `our_team` with the full names (First Last) of each team member. Although this task is worth no points, failing to complete this task will result in a one-point deduction.
 
 ```{r our_team}
-our_team = c('First Last')
+our_team = c('Katherine Ren', 'Nirel Amoyaw', 'Hannah Shin')
 our_team
 ```
 
@@ -93,7 +93,11 @@ Using the `ts_plays` data, find the `swiftie` for each of the categories below.
 ##### A1a. Most plays overall \[1 pt\]
 
 ```{r a1a}
-
+ts_plays |>
+  group_by(swiftie) |>
+  summarise(num_plays = n()) |>
+  arrange(desc(num_plays)) |>
+  slice(1)
 ```
 
 ##### A1b. Most plays between 11:00:00 AM and 2:49:59 PM inclusive \[2 pts\]
