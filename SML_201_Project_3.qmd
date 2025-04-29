@@ -286,6 +286,35 @@ Use a significance of 0.05.
 Comment in the summary about your conclusions from this test.
 
 ```{r a4}
+# Sample 25 distinct Swifties
+swiftie_sample <- ts_plays |>
+  distinct(swiftie) |>
+  slice_sample(n = 25)
+
+# Count number of plays of each song per swiftie, fill missing with 0
+song_counts <- ts_plays |>
+  filter(swiftie %in% swiftie_sample$swiftie,
+        song %in% c("Love Story", "You Belong With Me")) |>
+  group_by(swiftie, song) |>
+  summarise(count = n(), .groups = "drop") |>
+  pivot_wider(names_from = song, values_from = count, values_fill = list(count = 0))
+
+# Now ensure both columns exist
+if (!("Love Story" %in% names(song_counts))) {
+  song_counts$`Love Story` <- 0
+}
+if (!("You Belong With Me" %in% names(song_counts))) {
+  song_counts$`You Belong With Me` <- 0
+}
+# Perform paired t-test
+test_result <- t.test(
+  song_counts$`Love Story`,
+  song_counts$`You Belong With Me`,
+  paired = TRUE,
+  alternative = "greater"
+)
+# Output result
+print(test_result)
 
 ```
 
