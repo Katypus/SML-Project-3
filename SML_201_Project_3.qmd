@@ -61,6 +61,8 @@ library(gt)
 library(caTools)
 library(glmnet)
 library(htmltools)
+library(hms)
+library(lubridate)
 ```
 
 ------------------------------------------------------------------------
@@ -103,25 +105,67 @@ ts_plays |>
 ##### A1b. Most plays between 11:00:00 AM and 2:49:59 PM inclusive \[2 pts\]
 
 ```{r a1b}
-
+ts_plays |>
+  mutate(play_time = hms::as_hms(format(play_dt, "%H:%M:%S"))) |>
+  filter(play_time >= as_hms("11:00:00"), play_time <= as_hms("14:49:59")) |>
+  group_by(swiftie)|>
+  summarise(num_plays = n())|>
+  arrange(desc(num_plays))|>
+  slice(1)
 ```
 
 ##### A1c. Fewest plays of 'Cruel Summer' during the summer of 2024 \[3 pts\]
 
 ```{r a1c}
+ts_plays |>
+  filter(song == 'Cruel Summer',
+  play_dt >= as.POSIXct("2024-06-01"), play_dt <= as.POSIXct("2024-08-31")) |>
+  group_by(swiftie)|>
+  summarise(num_plays = n())|>
+  arrange(desc(num_plays))|>
+  slice(1)
 
 ```
 
 ##### A1d. Least variance in monthly plays \[4 pts\]
 
 ```{r a1d}
+plays_by_swiftie_month = ts_plays |>
+  group_by(swiftie, month = lubridate::floor_date(play_dt, 'month'))|>
+  summarize(month_listens = n())
 
+plays_by_swiftie_month |>
+  group_by(swiftie) |>
+  summarize(var = var(month_listens)) |>
+  arrange(var)|>
+  slice(1)
 ```
 
 ##### A1e. Greatest slope coefficient in the linear regression of daily plays (x = day of year, y = daily plays) during December \[5 pts\]
 
 ```{r a1e}
+# filter just december plays
+december = ts_plays |>
+  filter(month(play_dt) == 12) |>
+  mutate(
+    date = as_date(play_dt),
+    day_of_year = yday(play_dt)
+  )
 
+# only pay attention to number of daily plays per swiftie
+daily = december |>
+  group_by(swiftie, date, day_of_year) |>
+  summarise(daily_plays = n(), .groups = "drop")
+
+daily |>
+  group_by(swiftie) |>
+  summarise(
+    slope = if (n() > 1) coef(lm(daily_plays ~ day_of_year))[2] else NA_real_,
+    .groups = "drop"
+  ) |>
+  filter(!is.na(slope)) |>
+  arrange(desc(slope)) |>
+  slice(1)
 ```
 
 #### A2. Similar Swifties \[*10 pts*\]
