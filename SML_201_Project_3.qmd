@@ -175,6 +175,46 @@ Create a vector (called `our_songs`) that contains your team's songs played (`so
 You can create functions to streamline the processes of this problem.
 
 ```{r a2}
+# Create our_songs
+team_plays = ts_plays |>
+  filter(swiftie == 'Katherine Ren' | swiftie == 'Nirel Amoyaw' | swiftie == 'Hannah Shin')
+our_songs = team_plays |>
+  group_by(song) |>
+  summarise(freq = n())
+
+# Convert team song frequencies to a named vector
+our_song_vec <- setNames(our_songs$freq, our_songs$song)
+
+# STEP 1: Filter non-team Swifties
+team_members <- c('Katherine Ren', 'Nirel Amoyaw', 'Hannah Shin')
+
+non_team_plays <- ts_plays |>
+  filter(!(swiftie %in% team_members))
+
+# STEP 2: Create song frequency matrix (wide format)
+swiftie_song_matrix <- non_team_plays |>
+  count(swiftie, song) |>
+  pivot_wider(names_from = song, values_from = n, values_fill = 0)
+
+# STEP 3: Prepare aligned team vector
+all_songs <- colnames(swiftie_song_matrix)[-1]  # drop 'swiftie' column
+aligned_our_song_vec <- rep(0, length(all_songs))
+names(aligned_our_song_vec) <- all_songs
+aligned_our_song_vec[names(our_song_vec)] <- our_song_vec  # fill in team songs
+
+# STEP 4: Compute Euclidean distance for each Swiftie + print top 5
+swiftie_song_matrix |>
+  rowwise() |>
+  mutate(
+    distance = {
+      swiftie_vec <- as.numeric(c_across(all_of(all_songs)))
+      sqrt(sum((swiftie_vec - aligned_our_song_vec)^2))
+    }
+  ) |>
+  ungroup() |>
+  arrange(distance) |>
+  slice(1:5) |>
+  select(swiftie, distance)
 
 ```
 
