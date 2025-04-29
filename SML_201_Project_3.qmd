@@ -1,0 +1,288 @@
+---
+title: "Project 3 - Taylor"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    embed-resources: true
+    code-overflow: wrap
+editor: visual
+---
+
+## Our Team
+
+Fill the vector `our_team` with the full names (First Last) of each team member. Although this task is worth no points, failing to complete this task will result in a one-point deduction.
+
+```{r our_team}
+our_team = c('First Last')
+our_team
+```
+
+## Our Seed
+
+Fill the value `our_seed` with a calculated seed to precede all random sampling actions throughout this project. This way, your code can be executed for verification and reproduction. Although this task is worth no points, failing to complete this task will result in a five-point deduction.
+
+```{r our_seed}
+# calculate the seed to be the sum of the PUIDs of each teammate and then the remainder after dividing by 1746.
+# for example, if you have two teammates with PUIDs 888888888 & 999999999,
+our_seed = sum(888888888, 999999999) %% 1746
+```
+
+------------------------------------------------------------------------
+
+## Introduction
+
+Taylor Swift! Need we say more? While her name carries immense weight in the gravitas of pop culture, she is at the center of a vast network of artistic and entertainment icons.
+
+In this project, we will focus on answering questions related to Taylor Swift and her world. Computational models and automated processes will be created from data related to the following two topics:
+
+A.  Listening Analysis
+B.  Song Recommendations
+
+At the conclusion of each section, a written summary (5-10 sentences) of your work is required. The summaries should include:
+
+-   commentary on the results of your output
+-   potential enhancements to the models/processes
+-   any answers to questions from prior tasks within the section
+
+The project will be graded on a basis of 100 maximum points.
+
+------------------------------------------------------------------------
+
+## The Necessary Packages
+
+Run this entire code chunk BEFORE proceeding to ensure that all subsequent code are recognized and executable.
+
+```{r packages}
+#| message: false
+library(tidyverse)
+library(highcharter)
+library(visNetwork)
+library(gt)
+library(caTools)
+library(glmnet)
+library(htmltools)
+```
+
+------------------------------------------------------------------------
+
+## A. Listening Analysis \[*50 pts total*\]
+
+Perhaps there is no faster accumulation of data than that of music listening. Every time a song is played on a streaming platform, the listening details (who, what, when) of that play event are stored. With that data, much information can be obtained on user behavior, song preferences, and temporal trends. In this section, we will study the insights drawn from a sample of listening data.
+
+#### A0. Data
+
+-   `ts_plays`: a sampling of Taylor Swift songs played by a select group of Swifties.
+
+```{r a0a}
+#| message: false
+#| echo: false
+
+ts_plays = read_csv(file = 'https://www.dropbox.com/scl/fi/hx40zoj0o6f4hdmeb1mlf/ts_plays.csv?rlkey=yq8t0dp4q2aq1w9zkldwxigcr&st=87ozwgkn&&raw=1')
+```
+
+Data Dictionary - `ts_plays`
+
+-   `play_dt`: the date and timestamp of when the playback of the song was initiated (formatted as "yyyy-mm-dd hh:mm:ss")
+-   `swiftie`: the name of the user who played the song; note that each student's name will appear as one of the Swifties
+-   `song`: the name of the song played
+
+#### A1. Find the Swiftie \[*15 pts total*\]
+
+Using the `ts_plays` data, find the `swiftie` for each of the categories below.
+
+##### A1a. Most plays overall \[1 pt\]
+
+```{r a1a}
+
+```
+
+##### A1b. Most plays between 11:00:00 AM and 2:49:59 PM inclusive \[2 pts\]
+
+```{r a1b}
+
+```
+
+##### A1c. Fewest plays of 'Cruel Summer' during the summer of 2024 \[3 pts\]
+
+```{r a1c}
+
+```
+
+##### A1d. Least variance in monthly plays \[4 pts\]
+
+```{r a1d}
+
+```
+
+##### A1e. Greatest slope coefficient in the linear regression of daily plays (x = day of year, y = daily plays) during December \[5 pts\]
+
+```{r a1e}
+
+```
+
+#### A2. Similar Swifties \[*10 pts*\]
+
+Create a vector (called `our_songs`) that contains your team's songs played (`song`) with the frequency of the song being played (`freq`). Utilize this vector, along with `ts_plays`, to find the **five** other Swifties (not a team member) who are most similar to your team using the **Euclidean distance** measure.
+
+You can create functions to streamline the processes of this problem.
+
+```{r a2}
+
+```
+
+#### A3. Machine Learning Models \[*10 pts*\]
+
+Use an 80/20 split of train/test from `ts_plays` to train and test these models:
+
+-   `model1`: a **lasso** regression model (y = \# of songs played, x1 = hour of the day (0 to 23), x2 = weekend (0 or 1))
+-   `model2` a **ridge** regression model (same variables as `model1`)
+
+Comment in the summary about the results of these models.
+
+```{r a3 mod1}
+
+```
+
+```{r a3 mod2}
+
+```
+
+#### A4. Hypothesis Test \[*10 pts*\]
+
+Conduct a hypothesis test to conclude if 'Love Story' is played more often than 'You Belong With Me' is played by the same Swiftie.
+
+The data for this test must be the `ts_plays` data from a sample of 25 randomly-selected Swifties.
+
+Use a significance of 0.05.
+
+Comment in the summary about your conclusions from this test.
+
+```{r a4}
+
+```
+
+#### A5. Summary \[*5 pts*\]
+
+Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
+
+> Summary
+
+------------------------------------------------------------------------
+
+## B. Song Recommendations \[*50 pts total*\]
+
+The science (not so much art) of stringing songs together using their metrics is at the heart of this section. Our goal is to determine what should come next based on defined logic. We will utilize the Camelot Wheel (explained [here](https://dj.studio/blog/camelot-wheel)) to guide us in our effort.
+
+#### B0. Data
+
+The `camelot` and `tracks` datasets will be used in this section.
+
+```{r b0}
+#| message: false
+#| echo: false
+
+camelot = read_csv(file = 'https://www.dropbox.com/scl/fi/lxldj4625pflbbjq9mw5e/ts_camelot.csv?rlkey=webhnlh6dq37k6ok2qy65591k&st=mix4dgom&raw=1')
+
+tracks = read_csv(file = 'https://www.dropbox.com/scl/fi/285vnrhmbtzx0236j4lx1/ts_tracks.csv?rlkey=fk9vzhi5tx6j0l8j2kse9ujzk&st=zg0imlm3&raw=1')
+```
+
+Data Dictionary - `camelot`
+
+-   `from`: the originating key
+-   to`:` the destination key
+-   `type`: the type of transition (Perfect, Up1, Down1, Scale)
+
+Data Dictionary - `tracks`
+
+-   `artist`: the artist(s) of the song
+-   `song`: the song title
+-   `energy`: the energy score (0 to 99) of the song
+-   `danceability`: the danceability score (0 to 99) of the song
+-   `happiness`: the happiness score (0 to 99) of the song
+-   `cmlt`: the Camelot value of the song
+-   `vid`: the url to video of the song (Taylor Swift songs only)
+
+#### B1. The Camelot Wheel Network \[*10 pts*\]
+
+![](https://www.dropbox.com/scl/fi/z20zmigzoowycla37b911/camelot.png?rlkey=42fwsqargov4qkm8t43wgkhpp&st=dra56rgh&raw=1){fig-align="center" width="3in"}
+
+Generate a graph network (using `visNetwork`) showing the allowable paths for songs following the Camelot Wheel.
+
+The graph must show arrows pointing toward the nodes to which a particular node can move. For example, for 12B, the allowable moves are to 12B, 12A, 11B, and 1B.
+
+Use a color scheme similar to the wheel image above.
+
+```{r b1}
+
+```
+
+#### B2. Setlist \[*15 pts*\]
+
+Starting with a single song from tracks, create a list of **ten** songs such that each successive song follows this logic:
+
+-   The next song must follow the Camelot Wheel rules.
+-   The next song must increase in energy from the prior song. Note that a rapid rise in energy will limit the availability of songs in the later songs yet to be determined.
+-   The next song must be one of the top 15 closest songs when measured by the Euclidean distance of danceability and happiness.
+-   The smallest cosine similarity between any two songs in the setlist must be greater than 0.35. Cosine similarity must be measured using all of energy, danceability, and happiness.
+
+Use `gt` to display the setlist of songs.
+
+```{r b2}
+
+```
+
+#### B3. Next Taylor Music Video \[*20 pts*\]
+
+Using the `ts_video` function shown below, create a new function called `nextvid` that will take as input one of Taylor Swift songs (any song that has her name contained in `artist`) from tracks and return a video of a recommended song to follow the input song.
+
+You can create your own logic to determine the next song using only the datasets provided in this project.
+
+It is recommended that you generate a chart (using `highcharter`) to visualize the analysis.
+
+Points will be awarded for the creativity in the usage of the data to recommend the next song.
+
+```{r b30}
+
+ts_video = function(s) {
+  # find song in tracks
+  ss = tracks |> filter(song == s)
+  # create container to display video player
+  player = div(
+    align = 'center',
+    # header for song title
+    h4(ss$song),
+    # the video
+    tags$video(
+      src = ss$vid,
+      type = 'video/mp4',
+      width = '90%',
+      height = 'auto',
+      controls = TRUE,
+      autoplay = TRUE 
+    )
+  )
+  return(player)
+}
+```
+
+```{r b3}
+
+# example of a video play
+ts_video('ME!')
+```
+
+#### B4. Summary \[*5 pts*\]
+
+Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
+
+> Summary
+
+------------------------------------------------------------------------
+
+## Z. Wrap Up
+
+When you are ready to submit your project, follow these steps:
+
+1.  Click the `Render` button to compile this document. An HTML file will be created in the folder containing this QMD file.
+
+2.  Submit the HTML file to **Canvas** (not to Gradescope). Only one person per team needs to submit. Any confusion with multiple entries per team will result in point deductions in the final grade.
