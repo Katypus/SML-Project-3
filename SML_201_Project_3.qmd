@@ -63,6 +63,7 @@ library(glmnet)
 library(htmltools)
 library(hms)
 library(lubridate)
+library(rsample)
 ```
 
 ------------------------------------------------------------------------
@@ -228,11 +229,44 @@ Use an 80/20 split of train/test from `ts_plays` to train and test these models:
 Comment in the summary about the results of these models.
 
 ```{r a3 mod1}
+# STEP 1: Create features and response
+play_features <- ts_plays |>
+  mutate(
+    hour = hour(play_dt),
+    weekend = ifelse(wday(play_dt) %in% c(1, 7), 1, 0),  # 1=Sun, 7=Sat
+    date = as_date(play_dt)
+  ) |>
+  group_by(swiftie, date, hour, weekend) |>
+  summarise(num_songs_played = n(), .groups = "drop")
 
+# STEP 2: Select model-relevant columns
+model_data <- play_features |>
+  select(num_songs_played, hour, weekend)
+
+# STEP 3: Train/test split using rsample
+set.seed(42)
+split <- initial_split(model_data, prop = 0.8)
+train_data <- training(split)
+test_data <- testing(split)
+
+# STEP 4: Prepare matrices for glmnet
+x_train <- as.matrix(train_data[, c("hour", "weekend")])
+y_train <- train_data$num_songs_played
+
+x_test <- as.matrix(test_data[, c("hour", "weekend")])
+y_test <- test_data$num_songs_played
+
+# STEP 5: Train Lasso
+cv_lasso <- cv.glmnet(x_train, y_train, alpha = 1)
+# STEP 6: Predict and evaluate
+lasso_preds <- predict(cv_lasso, s = "lambda.min", newx = x_test)
+lasso_rmse <- sqrt(mean((lasso_preds - y_test)^2))
+cat("Lasso RMSE:", lasso_rmse, "\n")
 ```
 
 ```{r a3 mod2}
-
+# Train 
+cv_ridge <- cv.glmnet(x_train, y_train, alpha = 0)
 ```
 
 #### A4. Hypothesis Test \[*10 pts*\]
