@@ -370,6 +370,62 @@ The graph must show arrows pointing toward the nodes to which a particular node 
 Use a color scheme similar to the wheel image above.
 
 ```{r b1}
+# create nodes: 1A to 12B
+numbers <- 1:12
+keys <- c(paste0(numbers, "A"), paste0(numbers, "B"))
+
+nodes <- data.frame(
+  id = keys,
+  label = keys,
+  group = substr(keys, nchar(keys), nchar(keys)),  # "A" or "B"
+  stringsAsFactors = FALSE
+)
+
+# create camelot keys and colors
+camelot_colors <- setNames(
+  hcl(h = seq(15, 375, length = 25)[-25], l = 65, c = 100),  # 24 hues
+  keys
+)
+
+# apply colors to nodes
+nodes$color.background <- camelot_colors[nodes$id]
+
+
+# possible camelot transitions
+camelot_transitions <- function(key) {
+  num <- as.numeric(gsub("[AB]", "", key))
+  mode <- gsub("[0-9]+", "", key)
+  other_mode <- ifelse(mode == "A", "B", "A")
+
+  up1 <- ifelse(num == 12, 1, num + 1)
+  down1 <- ifelse(num == 1, 12, num - 1)
+
+  transitions <- c(
+    key,                         # Perfect (same key)
+    paste0(num, other_mode),     # Scale (same number, opposite mode)
+    paste0(up1, mode),           # Up1 (next number, same mode)
+    paste0(down1, mode)          # Down1 (previous number, same mode)
+  )
+  
+  # Remove self-loops (e.g., 1A → 1A)
+  transitions <- transitions[transitions != key]
+  
+  return(transitions)
+  
+}
+
+# edges
+edges <- do.call(rbind, lapply(nodes$id, function(from) {
+  to_nodes <- camelot_transitions(from)  # Get valid transitions
+  data.frame(from = from, to = to_nodes, arrows = "to", stringsAsFactors = FALSE)
+}))
+
+# Plot the network
+visNetwork(nodes, edges, height = "800px", width = "100%") %>%
+  visOptions(highlightNearest = TRUE, nodesIdSelection = TRUE) %>%
+  visLayout(randomSeed = 123, improvedLayout = TRUE) %>%
+  visEdges(smooth = FALSE) %>%
+  visPhysics(stabilization = TRUE)
 
 ```
 
@@ -385,7 +441,103 @@ Starting with a single song from tracks, create a list of **ten** songs such tha
 Use `gt` to display the setlist of songs.
 
 ```{r b2}
+#  function that calculates Euclidean distance (danceability and happiness)
+calculate_euclidean <- function(song1, song2) {
+  # access danceability and happiness from the song rows
+  sqrt((song1['danceability'] - song2['danceability'])^2 + 
+         (song1['happiness'] - song2['happiness'])^2)
+}
 
+# function that calculates cosine similarity using energy, danceability, and happiness
+calculate_cosine_similarity <- function(song1, song2) {
+  # access the columns using column names for song1 and song2
+  vec1 <- c(song1['energy'], song1['danceability'], song1['happiness'])
+  vec2 <- c(song2['energy'], song2['danceability'], song2['happiness'])
+  cosine(vec1, vec2)  # Cosine similarity using 'lsa' package
+}
+
+# function that gets the top 15 closest songs based on Euclidean distance
+get_top_15_closest <- function(current_song, tracks) {
+  tracks$euclidean_distance <- purrr::map_dbl(1:nrow(tracks), function(i) {
+    calculate_euclidean(current_song, tracks[i, ])
+  })
+  
+  top_15_songs <- tracks |>
+    arrange(euclidean_distance) |>
+    head(15)
+  
+  return(top_15_songs)
+}
+
+# function that checks that cosine similarity for the setlist is > 0.35
+check_cosine_similarity <- function(setlist, new_song) {
+  # Convert setlist into a list of songs
+  cosine_similarities <- purrr::map_dbl(1:nrow(setlist), function(i) {
+    calculate_cosine_similarity(setlist[i, ], new_song)
+  })
+  
+  # check if the minimum similarity is greater than 0.35
+  min_similarity <- min(cosine_similarities)
+  return(min_similarity > 0.35)
+}
+
+# Function to get valid Camelot transitions for a given key
+get_valid_transitions <- function(current_key, camelot_data) {
+  # Base R version to avoid errors with pull()
+  to_nodes <- camelot_data[camelot_data$from == current_key, "to"]
+  return(to_nodes)
+}
+
+# function to select the next song based on all rules
+select_next_song <- function(current_song, camelot_data, tracks, setlist) {
+  # get valid camelot transitions
+  valid_transitions <- get_valid_transitions(current_song$cmlt, camelot_data)
+  
+  # filter songs based on valid Camelot transitions and increasing energy
+  valid_songs <- tracks |>
+    filter(cmlt %in% valid_transitions) |>
+    filter(energy > current_song$energy)  # Ensure next song has higher energy
+  
+  # get top 15 closest songs by Euclidean distance
+  top_15_songs <- get_top_15_closest(current_song, valid_songs)
+  
+  # filter songs based on cosine similarity > 0.35
+  valid_songs_with_similarity <- top_15_songs |>
+    filter(purrr::map_lgl(top_15_songs, ~check_cosine_similarity(setlist, .)))
+  
+  # select song with the highest energy
+  next_song <- valid_songs_with_similarity[which.max(valid_songs_with_similarity$energy), ]
+  
+  return(next_song)
+}
+
+# start with an initial song
+starting_song <- tracks[1, ]  # For simplicity, let's pick the first song
+
+# initialize setlist with the starting song
+setlist <- starting_song
+current_song <- starting_song
+
+# loop to find the next 9 songs
+for (i in 2:10) {
+  next_song <- select_next_song(current_song, camelot, tracks, setlist)
+  
+  # add the next song to the setlist
+  setlist <- rbind(setlist, next_song)
+  
+  # update the current song
+  current_song <- next_song
+}
+
+# display the setlist using `gt`
+setlist |>
+  select(artist, song, energy, danceability, happiness, cmlt) |>
+  gt() |>
+  tab_header(title = "Setlist of 10 Songs") |>
+  tab_spanner(
+    label = "Song Details",
+    columns = c(artist, song, energy, danceability, happiness)
+  )
 ```
 
 #### B3. Next Taylor Music Video \[*20 pts*\]
