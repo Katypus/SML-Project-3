@@ -324,7 +324,7 @@ print(test_result)
 
 Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
 
-> In this section, we used a combination of data manipulation techniques such as group_by(), summarise(), filter(), and piping to extract insights from Taylor Swift song play data. In A1, we identified notable listening patterns among Swifties: Claire Kho had the most plays overall (737 total), and Jack Gregorski had the most plays during the midday period of 11:00 AM to 2:49 PM (138 plays). We defined summer using New Jersey’s 2024 dates (June 20 – September 22) and found that Aidan Wang had the fewest plays of Cruel Summer during that time (1 play). Givarra Azhar Abdullah showed the most consistent listening behavior with the least variance in monthly plays (variance of 25.5). In A1e, we found the Swiftie whose December listening habits increased the most using the slope of a linear regression model on daily play counts. In A2, we calculated Euclidean distances between song frequencies to identify the five Swifties most similar to our team’s listening habits. For A3, we trained lasso and ridge regression models to predict song play counts using hour of day and weekend indicators, finding comparable RMSE values that indicate modest predictive power. For one area of improvement adding more features like user identity or song characteristics might improve model performance. Finally, in A4, we ran a paired t-test and found statistically significant evidence (at α = 0.05) that Love Story is played more often than You Belong With Me. 
+> In this section, we used a combination of data manipulation techniques such as group_by(), summarise(), filter(), and piping to extract insights from Taylor Swift song play data. In A1, we identified notable listening patterns among Swifties: Claire Kho had the most plays overall (737 total), and Jack Gregorski had the most plays during the midday period of 11:00 AM to 2:49 PM (138 plays). We defined summer using New Jersey’s 2024 dates (June 20 – September 22) and found that Aidan Wang had the fewest plays of Cruel Summer during that time (1 play). Givarra Azhar Abdullah showed the most consistent listening behavior with the least variance in monthly plays (variance of 25.5). In A1e, we found the Swiftie whose December listening habits increased the most using the slope of a linear regression model on daily play counts. In A2, we calculated Euclidean distances between song frequencies to identify the five Swifties most similar to our team’s listening habits. For A3, we trained lasso and ridge regression models to predict song play counts using hour of day and weekend indicators, finding comparable RMSE values that indicate modest predictive power. For one area of improvement adding more features like user identity or song characteristics might improve model performance. Finally, in A4, we ran a paired t-test and found statistically significant evidence (at α = 0.05) that Love Story is played more often than You Belong With Me.
 
 ------------------------------------------------------------------------
 
@@ -443,134 +443,150 @@ Starting with a single song from tracks, create a list of **ten** songs such tha
 Use `gt` to display the setlist of songs.
 
 ```{r b2}
-library(lsa)
+library(dplyr)
+library(purrr)
+library(stringr)
 
-# Euclidean distance on danceability and happiness
-calculate_euclidean <- function(song1, song2) {
-  # Convert song2 to a data frame row if it's a list/vector
-  dance_diff <- as.numeric(song1$danceability) - as.numeric(song2[["danceability"]])
-  happy_diff <- as.numeric(song1$happiness) - as.numeric(song2[["happiness"]])
-  
-  sqrt(dance_diff^2 + happy_diff^2)
+# Parse Camelot key to number and mode
+parse_camelot <- function(key) {
+  number <- as.numeric(str_extract(key, "\\d+"))
+  mode <- str_extract(key, "[AB]")
+  list(number = number, mode = mode)
 }
 
-# Cosine similarity using energy, danceability, happiness
-calculate_cosine_similarity <- function(song1, song2) {
-  vec1 <- as.numeric(song1[c("energy", "danceability", "happiness")])
-  vec2 <- as.numeric(song2[c("energy", "danceability", "happiness")])
-  cosine(vec1, vec2)
+# Check if two keys are compatible on the Camelot Wheel
+camelot_compatible <- function(key1, key2) {
+  k1 <- parse_camelot(key1)
+  k2 <- parse_camelot(key2)
+  if (any(is.na(c(k1$number, k2$number, k1$mode, k2$mode)))) return(FALSE)
+
+  num_diff <- abs(k1$number - k2$number)
+  num_diff <- ifelse(num_diff == 11, 1, num_diff) # wrap-around logic
+  same_number_diff_mode <- (k1$number == k2$number && k1$mode != k2$mode)
+
+  return(num_diff == 1 || same_number_diff_mode)
 }
 
-# Get top 15 closest songs by Euclidean distance
-get_top_15_closest <- function(current_song, candidates) {
-  candidates |>
-    mutate(euclidean = map_dbl(row_number(), function(i) {
-      candidate_row <- candidates |> slice(i)
-      calculate_euclidean(current_song, candidate_row)
-    })) |>
-    arrange(euclidean) |>
-    slice(1:15)
+# Cosine similarity for (energy, danceability, happiness)
+cosine_similarity <- function(a, b) {
+  sum(a * b) / (sqrt(sum(a^2)) * sqrt(sum(b^2)))
 }
 
-# Get valid transitions from Camelot wheel
-get_valid_transitions <- function(current_key, camelot_data) {
-  transitions <- camelot_data |>
-    filter(from == current_key) |>
-    pull(to)
-
-  if (length(transitions) == 0) return(character(0))
-  return(transitions)
+# Euclidean distance in (danceability, happiness)
+euclidean_distance <- function(a, b) {
+  sqrt(sum((a - b)^2))
 }
 
-# Check cosine similarity to entire setlist > 0.35
-check_cosine_similarity <- function(setlist, new_song) {
-  similarities <- map_dbl(1:nrow(setlist), \(i) {
-    calculate_cosine_similarity(setlist[i, ], new_song)
-  })
-  min(similarities) > 0.35
-}
-
-# Select next song with all filtering rules
-select_next_song <- function(current_song, camelot_data, tracks, setlist) {
-  valid_keys <- get_valid_transitions(current_song$cmlt, camelot_data)
-
-  if (length(valid_keys) == 0) {
-    message("No valid Camelot transitions from key: ", current_song$cmlt)
-    return(NULL)
-  }
-
-  candidates <- tracks |>
-    filter(cmlt %in% valid_keys, energy > current_song$energy)
-
-  if (nrow(candidates) == 0) {
-    message("No candidates found with higher energy for key: ", current_song$cmlt)
-    return(NULL)
-  }
-
-  top_15 <- get_top_15_closest(current_song, candidates)
-
-  filtered <- top_15 |>
-    rowwise() |>
-    filter(check_cosine_similarity(setlist, cur_data())) |>
-    ungroup()
-
-  if (nrow(filtered) == 0) {
-    message("No songs passed cosine similarity > 0.35.")
-    return(NULL)
-  }
-
-  filtered |>
-    arrange(desc(energy)) |>
-    slice(1)
-}
-
-# Automatically find a valid starting song
-find_valid_starting_song <- function(tracks, camelot_data, max_attempts = 100) {
-  candidates <- tracks |>
-    filter(energy < 50, cmlt %in% camelot_data$from) |>
-    slice_sample(n = max_attempts)
-
-  for (i in 1:nrow(candidates)) {
-    candidate <- candidates[i, ]
-    setlist <- candidate
-    current_song <- candidate
-
-    for (j in 2:10) {
-      next_song <- select_next_song(current_song, camelot_data, tracks, setlist)
-
-      if (is.null(next_song)) {
-        break
-      }
-
-      setlist <- bind_rows(setlist, next_song)
-      current_song <- next_song
-    }
-
-    if (nrow(setlist) == 10) {
-      message(" Found valid setlist starting with: ", candidate$song)
-      return(setlist)
-    }
-  }
-
-  message(" No valid setlist found in ", max_attempts, " attempts.")
-  return(NULL)
-}
-
-# final setlist display
-final_setlist <- find_valid_starting_song(tracks, camelot)
-
-if (!is.null(final_setlist)) {
-  final_setlist |>
-    select(artist, song, energy, danceability, happiness, cmlt) |>
-    gt() |>
-    tab_header(title = " 10-Song Setlist") |>
-    tab_spanner(
-      label = "Song Features",
-      columns = c(energy, danceability, happiness)
+# Main playlist builder
+build_setlist <- function(tracks, start_index = 1) {
+  # Normalize energy, danceability, happiness to [0,1]
+  tracks <- tracks |>
+    mutate(
+      energy = energy / 100,
+      danceability = danceability / 100,
+      happiness = happiness / 100
     )
+
+  setlist <- tracks[start_index, ]
+  remaining_tracks <- tracks[-start_index, ]
+
+  for (i in 2:10) {
+    current <- setlist[nrow(setlist), ]
+
+    # Filter by Camelot compatibility
+    camelot_matches <- remaining_tracks |>
+      rowwise() |>
+      mutate(is_compatible = camelot_compatible(current$cmlt, cmlt)) |>
+      ungroup() |>
+      filter(is_compatible)
+
+    # Filter by energy > current & <= controlled growth
+    energy_max <- max(tracks$energy)
+    steps_left <- 10 - nrow(setlist)
+    delta_max <- (energy_max - current$energy) / steps_left
+
+    energy_matches <- camelot_matches |>
+      filter(
+        energy > current$energy,
+        energy <= current$energy + delta_max + 0.01
+      )
+
+    if (nrow(energy_matches) == 0) break
+
+    # Get 15 nearest neighbors in (danceability, happiness)
+    current_vec_dh <- c(current$danceability, current$happiness)
+
+    energy_matches <- energy_matches |>
+      mutate(dist = map_dbl(
+        1:nrow(energy_matches),
+        \(i) euclidean_distance(current_vec_dh, c(danceability[i], happiness[i]))
+      )) |>
+      arrange(dist) |>
+      slice_head(n = min(15, nrow(energy_matches)))
+
+    # Filter: new song must have cosine similarity > 0.35 with all in setlist
+    # Create a matrix of prior song vectors
+    setlist_matrix <- as.matrix(setlist[, c("energy", "danceability", "happiness")])
+
+    # Precompute dot products and norms for setlist
+    setlist_norms <- sqrt(rowSums(setlist_matrix^2))
+
+    # Vectorized cosine similarity check
+    candidates <- energy_matches |>
+      rowwise() |>
+      mutate(
+        candidate_vec = list(c(energy, danceability, happiness)),
+        candidate_norm = sqrt(sum(unlist(candidate_vec)^2)),
+        is_valid = all(
+        (setlist_matrix %*% unlist(candidate_vec)) /
+          (setlist_norms * candidate_norm) > 0.35
+        )
+      ) |>
+     ungroup() |>
+     filter(is_valid) |>
+     select(-candidate_vec, -candidate_norm, -is_valid)
+
+    if (nrow(candidates) == 0) {
+      message("No valid song found at step ", i)
+      break
+    }
+
+    # Choose next song with highest cosine similarity to previous
+    next_song <- candidates |>
+      mutate(sim = map_dbl(1:n(), \(idx) {
+        cosine_similarity(
+          c(energy[idx], danceability[idx], happiness[idx]),
+          c(current$energy, current$danceability, current$happiness)
+        )
+      })) |>
+      arrange(desc(sim)) |>
+      slice_head(n = 1)
+
+    setlist <- bind_rows(setlist, next_song)
+    remaining_tracks <- remaining_tracks |>
+      filter(song != next_song$song)
+  }
+
+  return(setlist)
 }
 
+display_setlist <- function(setlist) {
+  setlist |>
+    mutate(
+      energy = round(energy * 100, 1),
+      danceability = round(danceability * 100, 1),
+      happiness = round(happiness * 100, 1)
+    ) |>
+    select(song, artist, energy, danceability, happiness, cmlt) |>
+    gt() |>
+    tab_header(title = "Generated Setlist (10 Songs)")
+}
 
+start_idx <- sample(1:nrow(tracks), 1)
+
+my_setlist <- build_setlist(tracks, start_index = start_idx)
+
+display_setlist(my_setlist)
 ```
 
 #### B3. Next Taylor Music Video \[*20 pts*\]
@@ -617,7 +633,7 @@ ts_video('ME!')
 
 Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
 
-> Summary
+> In this section, we designed a multi-step algorithm to generate a dynamic 10-song playlist following specific musical and mathematical constraints. In B2, we constructed the playlist by starting from a single song in the `tracks` dataset and sequentially adding songs that followed Camelot Wheel rules, increased in energy, and fell among the top 15 closest songs in terms of Euclidean distance in danceability and happiness. To ensure musical cohesion, we also required a minimum cosine similarity threshold of 0.35 across all pairs using energy, danceability, and happiness. To prevent the playlist from stalling, we implemented energy smoothing and optimized the cosine similarity step with matrix operations. The final playlist was displayed using `gt` and experimentation showed that careful selection of the first song and controlled energy growth were key to success. In B3, we created a `nextvid()` function to recommend the next Taylor Swift music video by leveraging song similarities to select a smooth follow-up video based on musical characteristics. One enhancement to this system would be incorporating user listening history to make the recommendation even more personalized.
 
 ------------------------------------------------------------------------
 
