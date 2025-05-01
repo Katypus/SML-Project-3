@@ -24,7 +24,7 @@ Fill the value `our_seed` with a calculated seed to precede all random sampling 
 ```{r our_seed}
 # calculate the seed to be the sum of the PUIDs of each teammate and then the remainder after dividing by 1746.
 # for example, if you have two teammates with PUIDs 888888888 & 999999999,
-our_seed = sum(888888888, 999999999) %% 1746
+our_seed = sum(920318185, 920325821, 920345373) %% 1746
 ```
 
 ------------------------------------------------------------------------
@@ -96,6 +96,7 @@ Using the `ts_plays` data, find the `swiftie` for each of the categories below.
 ##### A1a. Most plays overall \[1 pt\]
 
 ```{r a1a}
+# gets the swifite with the most plays
 ts_plays |>
   group_by(swiftie) |>
   summarise(num_plays = n()) |>
@@ -120,10 +121,11 @@ ts_plays |>
 ```{r a1c}
 ts_plays |>
   filter(song == 'Cruel Summer',
-  play_dt >= as.POSIXct("2024-06-01"), play_dt <= as.POSIXct("2024-08-31")) |>
+  # here, we use the definition of summer in NJ: 06/20/2024-09/22/2024
+  play_dt >= as.POSIXct("2024-06-20"), play_dt <= as.POSIXct("2024-09-22")) |>
   group_by(swiftie)|>
   summarise(num_plays = n())|>
-  arrange(desc(num_plays))|>
+  arrange(num_plays)|>
   slice(1)
 
 ```
@@ -186,24 +188,24 @@ our_songs = team_plays |>
 # Convert team song frequencies to a named vector
 our_song_vec <- setNames(our_songs$freq, our_songs$song)
 
-# STEP 1: Filter non-team Swifties
+# Filter non-team Swifties
 team_members <- c('Katherine Ren', 'Nirel Amoyaw', 'Hannah Shin')
 
 non_team_plays <- ts_plays |>
   filter(!(swiftie %in% team_members))
 
-# STEP 2: Create song frequency matrix (wide format)
+# Create song frequency matrix (wide format)
 swiftie_song_matrix <- non_team_plays |>
   count(swiftie, song) |>
   pivot_wider(names_from = song, values_from = n, values_fill = 0)
 
-# STEP 3: Prepare aligned team vector
+# Prepare aligned team vector
 all_songs <- colnames(swiftie_song_matrix)[-1]  # drop 'swiftie' column
 aligned_our_song_vec <- rep(0, length(all_songs))
 names(aligned_our_song_vec) <- all_songs
 aligned_our_song_vec[names(our_song_vec)] <- our_song_vec  # fill in team songs
 
-# STEP 4: Compute Euclidean distance for each Swiftie + print top 5
+# Compute Euclidean distance for each Swiftie + print top 5
 swiftie_song_matrix |>
   rowwise() |>
   mutate(
@@ -322,7 +324,7 @@ print(test_result)
 
 Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
 
-> Summary
+> In this section, we used a combination of data manipulation techniques such as group_by(), summarise(), filter(), and piping to extract insights from Taylor Swift song play data. In A1, we identified notable listening patterns among Swifties: Claire Kho had the most plays overall (737 total), and Jack Gregorski had the most plays during the midday period of 11:00 AM to 2:49 PM (138 plays). We defined summer using New Jersey’s 2024 dates (June 20 – September 22) and found that Aidan Wang had the fewest plays of Cruel Summer during that time (1 play). Givarra Azhar Abdullah showed the most consistent listening behavior with the least variance in monthly plays (variance of 25.5). In A1e, we found the Swiftie whose December listening habits increased the most using the slope of a linear regression model on daily play counts. In A2, we calculated Euclidean distances between song frequencies to identify the five Swifties most similar to our team’s listening habits. For A3, we trained lasso and ridge regression models to predict song play counts using hour of day and weekend indicators, finding comparable RMSE values that indicate modest predictive power. For one area of improvement adding more features like user identity or song characteristics might improve model performance. Finally, in A4, we ran a paired t-test and found statistically significant evidence (at α = 0.05) that Love Story is played more often than You Belong With Me. 
 
 ------------------------------------------------------------------------
 
@@ -389,7 +391,7 @@ camelot_colors <- setNames(
 
 # apply colors to nodes
 nodes$color.background <- camelot_colors[nodes$id]
-
+nodes$color.border <- "black"
 
 # possible camelot transitions
 camelot_transitions <- function(key) {
@@ -421,10 +423,10 @@ edges <- do.call(rbind, lapply(nodes$id, function(from) {
 }))
 
 # Plot the network
-visNetwork(nodes, edges, height = "800px", width = "100%") %>%
-  visOptions(highlightNearest = TRUE, nodesIdSelection = TRUE) %>%
-  visLayout(randomSeed = 123, improvedLayout = TRUE) %>%
-  visEdges(smooth = FALSE) %>%
+visNetwork(nodes, edges, height = "800px", width = "100%") |>
+  visOptions(highlightNearest = TRUE, nodesIdSelection = TRUE) |>
+  visEdges(smooth = TRUE) |>
+  visLayout(randomSeed = 123) |>
   visPhysics(stabilization = TRUE)
 
 ```
@@ -441,103 +443,134 @@ Starting with a single song from tracks, create a list of **ten** songs such tha
 Use `gt` to display the setlist of songs.
 
 ```{r b2}
-#  function that calculates Euclidean distance (danceability and happiness)
+library(lsa)
+
+# Euclidean distance on danceability and happiness
 calculate_euclidean <- function(song1, song2) {
-  # access danceability and happiness from the song rows
-  sqrt((song1['danceability'] - song2['danceability'])^2 + 
-         (song1['happiness'] - song2['happiness'])^2)
+  # Convert song2 to a data frame row if it's a list/vector
+  dance_diff <- as.numeric(song1$danceability) - as.numeric(song2[["danceability"]])
+  happy_diff <- as.numeric(song1$happiness) - as.numeric(song2[["happiness"]])
+  
+  sqrt(dance_diff^2 + happy_diff^2)
 }
 
-# function that calculates cosine similarity using energy, danceability, and happiness
+# Cosine similarity using energy, danceability, happiness
 calculate_cosine_similarity <- function(song1, song2) {
-  # access the columns using column names for song1 and song2
-  vec1 <- c(song1['energy'], song1['danceability'], song1['happiness'])
-  vec2 <- c(song2['energy'], song2['danceability'], song2['happiness'])
-  cosine(vec1, vec2)  # Cosine similarity using 'lsa' package
+  vec1 <- as.numeric(song1[c("energy", "danceability", "happiness")])
+  vec2 <- as.numeric(song2[c("energy", "danceability", "happiness")])
+  cosine(vec1, vec2)
 }
 
-# function that gets the top 15 closest songs based on Euclidean distance
-get_top_15_closest <- function(current_song, tracks) {
-  tracks$euclidean_distance <- purrr::map_dbl(1:nrow(tracks), function(i) {
-    calculate_euclidean(current_song, tracks[i, ])
-  })
-  
-  top_15_songs <- tracks |>
-    arrange(euclidean_distance) |>
-    head(15)
-  
-  return(top_15_songs)
+# Get top 15 closest songs by Euclidean distance
+get_top_15_closest <- function(current_song, candidates) {
+  candidates |>
+    mutate(euclidean = map_dbl(row_number(), function(i) {
+      candidate_row <- candidates |> slice(i)
+      calculate_euclidean(current_song, candidate_row)
+    })) |>
+    arrange(euclidean) |>
+    slice(1:15)
 }
 
-# function that checks that cosine similarity for the setlist is > 0.35
+# Get valid transitions from Camelot wheel
+get_valid_transitions <- function(current_key, camelot_data) {
+  transitions <- camelot_data |>
+    filter(from == current_key) |>
+    pull(to)
+
+  if (length(transitions) == 0) return(character(0))
+  return(transitions)
+}
+
+# Check cosine similarity to entire setlist > 0.35
 check_cosine_similarity <- function(setlist, new_song) {
-  # Convert setlist into a list of songs
-  cosine_similarities <- purrr::map_dbl(1:nrow(setlist), function(i) {
+  similarities <- map_dbl(1:nrow(setlist), \(i) {
     calculate_cosine_similarity(setlist[i, ], new_song)
   })
-  
-  # check if the minimum similarity is greater than 0.35
-  min_similarity <- min(cosine_similarities)
-  return(min_similarity > 0.35)
+  min(similarities) > 0.35
 }
 
-# Function to get valid Camelot transitions for a given key
-get_valid_transitions <- function(current_key, camelot_data) {
-  # Base R version to avoid errors with pull()
-  to_nodes <- camelot_data[camelot_data$from == current_key, "to"]
-  return(to_nodes)
-}
-
-# function to select the next song based on all rules
+# Select next song with all filtering rules
 select_next_song <- function(current_song, camelot_data, tracks, setlist) {
-  # get valid camelot transitions
-  valid_transitions <- get_valid_transitions(current_song$cmlt, camelot_data)
-  
-  # filter songs based on valid Camelot transitions and increasing energy
-  valid_songs <- tracks |>
-    filter(cmlt %in% valid_transitions) |>
-    filter(energy > current_song$energy)  # Ensure next song has higher energy
-  
-  # get top 15 closest songs by Euclidean distance
-  top_15_songs <- get_top_15_closest(current_song, valid_songs)
-  
-  # filter songs based on cosine similarity > 0.35
-  valid_songs_with_similarity <- top_15_songs |>
-    filter(purrr::map_lgl(top_15_songs, ~check_cosine_similarity(setlist, .)))
-  
-  # select song with the highest energy
-  next_song <- valid_songs_with_similarity[which.max(valid_songs_with_similarity$energy), ]
-  
-  return(next_song)
+  valid_keys <- get_valid_transitions(current_song$cmlt, camelot_data)
+
+  if (length(valid_keys) == 0) {
+    message("No valid Camelot transitions from key: ", current_song$cmlt)
+    return(NULL)
+  }
+
+  candidates <- tracks |>
+    filter(cmlt %in% valid_keys, energy > current_song$energy)
+
+  if (nrow(candidates) == 0) {
+    message("No candidates found with higher energy for key: ", current_song$cmlt)
+    return(NULL)
+  }
+
+  top_15 <- get_top_15_closest(current_song, candidates)
+
+  filtered <- top_15 |>
+    rowwise() |>
+    filter(check_cosine_similarity(setlist, cur_data())) |>
+    ungroup()
+
+  if (nrow(filtered) == 0) {
+    message("No songs passed cosine similarity > 0.35.")
+    return(NULL)
+  }
+
+  filtered |>
+    arrange(desc(energy)) |>
+    slice(1)
 }
 
-# start with an initial song
-starting_song <- tracks[1, ]  # For simplicity, let's pick the first song
+# Automatically find a valid starting song
+find_valid_starting_song <- function(tracks, camelot_data, max_attempts = 100) {
+  candidates <- tracks |>
+    filter(energy < 50, cmlt %in% camelot_data$from) |>
+    slice_sample(n = max_attempts)
 
-# initialize setlist with the starting song
-setlist <- starting_song
-current_song <- starting_song
+  for (i in 1:nrow(candidates)) {
+    candidate <- candidates[i, ]
+    setlist <- candidate
+    current_song <- candidate
 
-# loop to find the next 9 songs
-for (i in 2:10) {
-  next_song <- select_next_song(current_song, camelot, tracks, setlist)
-  
-  # add the next song to the setlist
-  setlist <- rbind(setlist, next_song)
-  
-  # update the current song
-  current_song <- next_song
+    for (j in 2:10) {
+      next_song <- select_next_song(current_song, camelot_data, tracks, setlist)
+
+      if (is.null(next_song)) {
+        break
+      }
+
+      setlist <- bind_rows(setlist, next_song)
+      current_song <- next_song
+    }
+
+    if (nrow(setlist) == 10) {
+      message(" Found valid setlist starting with: ", candidate$song)
+      return(setlist)
+    }
+  }
+
+  message(" No valid setlist found in ", max_attempts, " attempts.")
+  return(NULL)
 }
 
-# display the setlist using `gt`
-setlist |>
-  select(artist, song, energy, danceability, happiness, cmlt) |>
-  gt() |>
-  tab_header(title = "Setlist of 10 Songs") |>
-  tab_spanner(
-    label = "Song Details",
-    columns = c(artist, song, energy, danceability, happiness)
-  )
+# final setlist display
+final_setlist <- find_valid_starting_song(tracks, camelot)
+
+if (!is.null(final_setlist)) {
+  final_setlist |>
+    select(artist, song, energy, danceability, happiness, cmlt) |>
+    gt() |>
+    tab_header(title = " 10-Song Setlist") |>
+    tab_spanner(
+      label = "Song Features",
+      columns = c(energy, danceability, happiness)
+    )
+}
+
+
 ```
 
 #### B3. Next Taylor Music Video \[*20 pts*\]
